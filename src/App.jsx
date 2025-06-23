@@ -8,25 +8,44 @@ export default function App() {
   const chatEndRef = useRef(null);
 
   const sendMessage = async () => {
-    if (!input.trim()) return;
-    const userMessage = { sender: 'user', text: input };
-    setMessages((prev) => [...prev, userMessage]);
-    setInput('');
-    setIsWaiting(true);
+  if (!input.trim()) return;
+  const userMessage = { sender: 'user', text: input };
+  setMessages((prev) => [...prev, userMessage]);
+  setInput('');
+  setIsWaiting(true);
 
-    try {
-      await axios.post('https://uniform-forwarder.up.railway.app/start', {
-        user_id: 'demo-user',
-        message: input,
-      });
+  try {
+    const res = await axios.post('/api/chat', {
+      assistant_id: 'asst_Iipk5uRob6IXSgf3t3OcoLVP',
+      messages: [
+        {
+          role: 'user',
+          content: input
+        }
+      ]
+    });
 
-      pollResponses();
-    } catch (err) {
+    const reply = res.data?.choices?.[0]?.message?.content;
+
+    if (reply) {
       setMessages((prev) => [
         ...prev,
-        { sender: 'bot', text: 'Error sending message. Please try again.' },
+        { sender: 'bot', text: reply }
       ]);
-      setIsWaiting(false);
+    } else {
+      throw new Error('No reply returned from assistant');
+    }
+  } catch (err) {
+    console.error('Chat API error:', err);
+    setMessages((prev) => [
+      ...prev,
+      { sender: 'bot', text: 'Error sending message. Please try again.' },
+    ]);
+  } finally {
+    setIsWaiting(false);
+  }
+};
+
     }
   };
 
