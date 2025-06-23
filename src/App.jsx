@@ -46,10 +46,6 @@ export default function App() {
   }
 };
 
-
-    }
-  };
-
   const pollResponses = async () => {
     const interval = setInterval(async () => {
       try {
