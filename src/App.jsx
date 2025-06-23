@@ -25,7 +25,7 @@ export default function App() {
       ]
     });
 
-    const reply = res.data?.choices?.[0]?.message?.content;
+    const reply = const reply = res.data?.reply;
 
     if (reply) {
       setMessages((prev) => [
