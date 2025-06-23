@@ -40,7 +40,7 @@ export default function App() {
         if (res.data && res.data.status === 'done') {
           setMessages((prev) => [
             ...prev,
-            { sender: 'bot', text: res.data.summary || 'Here's your mockup:' },
+            { sender: 'bot', text: res.data.summary || "Here's your mockup:" },
             { sender: 'bot', image: res.data.image_url },
           ]);
           clearInterval(interval);
