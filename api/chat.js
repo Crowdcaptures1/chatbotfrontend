@@ -3,6 +3,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  console.time("response-timer");
+
   try {
     const { messages, assistant_id, thread_id: incomingThreadId } = req.body;
 
@@ -47,9 +49,9 @@ export default async function handler(req, res) {
 
     const run = await runRes.json();
 
-    // 4. Poll until run completes
+    // 4. Poll until run completes (shorter polling to prevent Vercel timeout)
     let status = run.status;
-    const maxChecks = 4; // ~6s max wait
+    const maxChecks = 3; // ~4.5s total
     let checks = 0;
 
     while (status !== "completed" && status !== "failed" && checks < maxChecks) {
@@ -69,7 +71,11 @@ export default async function handler(req, res) {
     }
 
     if (status !== "completed") {
-      return res.status(408).json({ error: "Assistant timeout – try again soon.", thread_id: threadId });
+      console.timeEnd("response-timer");
+      return res.status(408).json({
+        error: "Assistant timeout – try again soon.",
+        thread_id: threadId
+      });
     }
 
     // 5. Get the response message
@@ -86,9 +92,15 @@ export default async function handler(req, res) {
     const messagesData = await messagesRes.json();
     const lastMessage = messagesData.data?.[0]?.content?.[0]?.text?.value;
 
-    return res.status(200).json({ reply: lastMessage || "No message returned", thread_id: threadId });
+    console.timeEnd("response-timer");
+
+    return res.status(200).json({
+      reply: lastMessage || "No message returned",
+      thread_id: threadId
+    });
   } catch (err) {
+    console.timeEnd("response-timer");
     console.error("Chat API Error:", err);
-    res.status(500).json({ error: "OpenAI interaction failed." });
+    return res.status(500).json({ error: "OpenAI interaction failed." });
   }
 }
