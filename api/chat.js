@@ -46,7 +46,7 @@ export default async function handler(req, res) {
 
     // 4. Poll until run completes
 let status = run.status;
-const maxChecks = 10; // ~15s max wait time
+const maxChecks = 5; // Limit to ~7.5s
 let checks = 0;
 
 while (status !== "completed" && status !== "failed" && checks < maxChecks) {
