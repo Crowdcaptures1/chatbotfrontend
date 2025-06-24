@@ -45,21 +45,29 @@ export default async function handler(req, res) {
     const run = await runRes.json();
 
     // 4. Poll until run completes
-    let status = run.status;
-    while (status !== "completed" && status !== "failed") {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      const statusCheck = await fetch(
-        `https://api.openai.com/v1/threads/${thread.id}/runs/${run.id}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
-          }
-        }
-      );
-      const statusData = await statusCheck.json();
-      status = statusData.status;
+let status = run.status;
+const maxChecks = 10; // ~15s max wait time
+let checks = 0;
+
+while (status !== "completed" && status !== "failed" && checks < maxChecks) {
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  const statusCheck = await fetch(
+    `https://api.openai.com/v1/threads/${thread.id}/runs/${run.id}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+      }
     }
+  );
+  const statusData = await statusCheck.json();
+  status = statusData.status;
+  checks++;
+}
+
+if (status !== "completed") {
+  return res.status(408).json({ error: "Assistant timeout – try again soon." });
+}
 
     if (status === "failed") {
       throw new Error("Assistant run failed");
