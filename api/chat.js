@@ -46,11 +46,12 @@ export default async function handler(req, res) {
 
     // 4. Poll until run completes
 let status = run.status;
-const maxChecks = 5; // Limit to ~7.5s
+const maxChecks = 5; // 5 x 1.5s = 7.5s total max
 let checks = 0;
 
 while (status !== "completed" && status !== "failed" && checks < maxChecks) {
   await new Promise((resolve) => setTimeout(resolve, 1500));
+
   const statusCheck = await fetch(
     `https://api.openai.com/v1/threads/${thread.id}/runs/${run.id}`,
     {
@@ -60,22 +61,17 @@ while (status !== "completed" && status !== "failed" && checks < maxChecks) {
       }
     }
   );
+
   const statusData = await statusCheck.json();
   status = statusData.status;
   checks++;
 }
-    if (status !== "completed") {
-  return res.status(408).json({ error: "Assistant timeout – try again soon." });
-}
 
+console.log("Polling ended:", { status, checks });
 
 if (status !== "completed") {
-  return res.status(408).json({ error: "Assistant timeout – try again soon." });
+  return res.status(408).json({ error: "OpenAI assistant run is taking too long. Try again shortly." });
 }
-
-    if (status === "failed") {
-      throw new Error("Assistant run failed");
-    }
 
     // 5. Get the response message
     const messagesRes = await fetch(
