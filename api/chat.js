@@ -64,6 +64,10 @@ while (status !== "completed" && status !== "failed" && checks < maxChecks) {
   status = statusData.status;
   checks++;
 }
+    if (status !== "completed") {
+  return res.status(408).json({ error: "Assistant timeout – try again soon." });
+}
+
 
 if (status !== "completed") {
   return res.status(408).json({ error: "Assistant timeout – try again soon." });
