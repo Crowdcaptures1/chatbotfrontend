@@ -1,106 +1,51 @@
+const OpenAI = require('openai');
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  console.time("response-timer");
+  const { messages, assistant_id } = req.body;
 
   try {
-    const { messages, assistant_id, thread_id: incomingThreadId } = req.body;
+    const thread = await openai.beta.threads.create();
 
-    let threadId = incomingThreadId;
-
-    // 1. Create a thread if not provided
-    if (!threadId) {
-      const threadRes = await fetch("https://api.openai.com/v1/threads", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json"
-        }
-      });
-
-      const thread = await threadRes.json();
-      threadId = thread.id;
-    }
-
-    // 2. Post message to thread
-    await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        role: "user",
-        content: messages[0].content
-      })
+    await openai.beta.threads.messages.create(thread.id, {
+      role: 'user',
+      content: messages[0].content,
     });
 
-    // 3. Start assistant run
-    const runRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ assistant_id })
+    const run = await openai.beta.threads.runs.create(thread.id, {
+      assistant_id: assistant_id || process.env.ASSISTANT_ID,
     });
 
-    const run = await runRes.json();
-
-    // 4. Poll until run completes (shorter polling to prevent Vercel timeout)
-    let status = run.status;
-    const maxChecks = 3; // ~4.5s total
-    let checks = 0;
-
-    while (status !== "completed" && status !== "failed" && checks < maxChecks) {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      const statusCheck = await fetch(
-        `https://api.openai.com/v1/threads/${threadId}/runs/${run.id}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
-          }
-        }
-      );
-      const statusData = await statusCheck.json();
-      status = statusData.status;
-      checks++;
+    // Poll until complete
+    let status = 'in_progress';
+    let finalRun;
+    while (status !== 'completed' && status !== 'failed') {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      finalRun = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      status = finalRun.status;
     }
 
-    if (status !== "completed") {
-      console.timeEnd("response-timer");
-      return res.status(408).json({
-        error: "Assistant timeout – try again soon.",
-        thread_id: threadId
-      });
+    if (status === 'failed') {
+      return res.status(500).json({ error: 'Assistant run failed' });
     }
 
-    // 5. Get the response message
-    const messagesRes = await fetch(
-      `https://api.openai.com/v1/threads/${threadId}/messages`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
-        }
-      }
-    );
+    const messagesRes = await openai.beta.threads.messages.list(thread.id);
+    const last = messagesRes.data.find(m => m.role === 'assistant');
 
-    const messagesData = await messagesRes.json();
-    const lastMessage = messagesData.data?.[0]?.content?.[0]?.text?.value;
-
-    console.timeEnd("response-timer");
-
-    return res.status(200).json({
-      reply: lastMessage || "No message returned",
-      thread_id: threadId
+    res.status(200).json({
+      choices: [
+        { message: { content: last?.content?.[0]?.text?.value || 'No response.' } },
+      ],
     });
   } catch (err) {
-    console.timeEnd("response-timer");
-    console.error("Chat API Error:", err);
-    return res.status(500).json({ error: "OpenAI interaction failed." });
+    console.error('OpenAI error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 }
