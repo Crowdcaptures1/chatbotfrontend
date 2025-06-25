@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     });
 
     const run = await openai.beta.threads.runs.create(thread.id, {
-      assistant_id: assistant_id || process.env.asst_Iipk5uRob6IXSgf3t3OcoLVP,
+      assistant_id: assistant_id || process.env.ASSISTANT_ID,
     });
 
     // Poll until complete
